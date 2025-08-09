@@ -149,10 +149,27 @@ def apply_filters_and_sort(df, time_pref, sort_pref, max_duration_hours, selecte
 
 def display_train_card(row):
 
-    badge_class = "green" if row['availability'].startswith("AVAILABLE") else \
-                  "orange" if row['availability'].startswith("WL") else \
-                  "red"
-  
+    badge_class = "green"
+    
+    from datetime import datetime
+
+    # Convert time string to datetime object
+    dep_time_obj = datetime.strptime(row['departure_time'], "%H:%M")  # adjust format if needed
+    hour = dep_time_obj.hour
+    dep_badge_class = "violet"
+
+    # Categorize based on hour
+    if 5 <= hour < 12:
+        dep_period = "Morning"
+    elif 12 <= hour < 17:
+        dep_period = "Afternoon"
+    elif 17 <= hour < 21:
+        dep_period = "Evening"
+    else:
+        dep_period = "Night"
+
+
+
     with st.expander(f"🚂 {row['train_name']} ({row['train_number']}) - ₹{row['ticket_fare']:.0f}", expanded=True):
 
         col1, col2 =st.columns(2)
@@ -162,8 +179,9 @@ def display_train_card(row):
             st.header(f"₹{row['ticket_fare']:.0f}")
         with col2:
             st.write(f"Duration: {row['duration']} | Date: {row['train_date']}" )
-            st.markdown(    f":violet-badge[:material/star: {row['booking_class']}] ")
-            st.markdown(    f":{badge_class}-badge[{row['availability']}] ")
+            st.markdown(    f":{badge_class}-badge[:material/star: {row['booking_class']}] :{badge_class}-badge[{row['availability']}] ")
+            st.markdown(f":{dep_badge_class}-badge[Departs in {dep_period}]")  # New badge
+
 
         st.caption(f"Last Updated: {row['last_updated']}")
 
@@ -224,7 +242,6 @@ if search_button:
                 st.metric("Highest Fare", f"₹{df_final['ticket_fare'].max():.0f}")
             with col4:
                 st.metric("Fastest Journey", df_final.loc[df_final['duration_minutes'].idxmin(), 'duration'])
-
             for _, row in df_final.iterrows():
                 display_train_card(row)
         else:

@@ -37,7 +37,7 @@ def fetch_train_data(source, destination, date):
         return None
 
 
-def process_train_data(data, selected_classes):
+def process_train_data(data, selected_classes, date):
     """
     Processes the raw train data to extract and filter relevant information.
     """
@@ -53,23 +53,27 @@ def process_train_data(data, selected_classes):
         sa_data = train.get('sa_data', [])
         if not isinstance(sa_data, list): continue
 
+        if not date== None:
+            if train.get('train_date') != date: continue
+
+
         for item in sa_data:
             booking_class = item.get("booking_class")
             if booking_class in selected_classes:
                 availability = item.get("availibility", "").strip()
-                if availability.startswith("AVAILABLE") or any(wl in availability for wl in ["WL1", "WL2"]):
-                    seat_info = item.get('seat_availibility')
-                    ticket_fare = seat_info[0].get('ticket_fare') if isinstance(seat_info, list) and seat_info else None
-                    cache_text = seat_info[0].get('cache_text') if isinstance(seat_info, list) and seat_info else None
+                if not(availability.startswith("AVAILABLE") or (availability in ["WL1", "WL2"] )): continue
+                seat_info = item.get('seat_availibility')
+                ticket_fare = seat_info[0].get('ticket_fare') if isinstance(seat_info, list) and seat_info else None
+                cache_text = seat_info[0].get('cache_text') if isinstance(seat_info, list) and seat_info else None
 
-                    expanded_rows.append({
-                        'train_number': train.get('train_number'), 'train_name': train.get('extended_train_name'),
-                        'from_station': train.get('from_station_name'), 'to_station': train.get('to_station_name'),
-                        'departure_time': train.get('from_sta'), 'arrival_time': train.get('to_sta'),
-                        'duration': train.get('duration'), 'train_date': train.get('train_date'),
-                        'booking_class': booking_class, 'availability': availability,
-                        'ticket_fare': ticket_fare, 'last_updated': cache_text,
-                    })
+                expanded_rows.append({
+                    'train_number': train.get('train_number'), 'train_name': train.get('extended_train_name'),
+                    'from_station': train.get('from_station_name'), 'to_station': train.get('to_station_name'),
+                    'departure_time': train.get('from_sta'), 'arrival_time': train.get('to_sta'),
+                    'duration': train.get('duration'), 'train_date': train.get('train_date'),
+                    'booking_class': booking_class, 'availability': availability,
+                    'ticket_fare': ticket_fare, 'last_updated': cache_text,
+                })
     return pd.DataFrame(expanded_rows)
 
 # --- Streamlit UI ---
@@ -84,14 +88,14 @@ with st.sidebar:
         source_station = st.text_input("From Station Code", "NDLS")
         destination_station = st.text_input("To Station Code", "CNB")
         journey_date = st.date_input("Date of Journey", datetime(2025, 8, 15))
+        want_near_dates = st.radio('Want to search for next dates too?', ['yes', 'no'], index=1, horizontal=True, key="want_near_dates")
         selected_classes = st.multiselect(
             "Select Class",
             ["1A", "2A", "3A", "SL", "CC", "3E"],
             default=["CC", "3A", "3E"]
         )
-        how_do_you_want = st.radio("How to filter by first", ["ticket_fare", "duration"])
+        how_do_you_want = st.radio("How to filter by first", ["ticket_fare", "duration"], index=0, key="how_do_you_want")
         
-        print(how_do_you_want)
         # --- NEW: Time preference selector ---
         time_preference = st.selectbox(
             "Departure Time",
@@ -115,7 +119,12 @@ if submit_button:
         raw_data = fetch_train_data(source_station, destination_station, journey_date.strftime('%Y-%m-%d'))
 
         if raw_data:
-            final_df = process_train_data(raw_data, selected_classes)
+
+            if want_near_dates== "no":
+                date = journey_date.strftime('%Y-%m-%d')
+            else:
+                date = None 
+            final_df = process_train_data(raw_data, selected_classes, date)
 
             if not final_df.empty:
                 # --- NEW: Time-based filtering logic ---
